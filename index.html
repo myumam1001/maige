@@ -1,1 +1,112 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <title>安全な暗号化投稿システム</title>
+    <!-- 暗号化ライブラリ -->
+    <script src="https://cloudflare.com"></script>
+</head>
+<body>
+
+    <h1>🔒 管理者ログイン＆投稿システム</h1>
+    
+    <!-- 1. パスワード入力エリア（ログイン） -->
+    <div id="loginArea">
+        <p>分かりやすいパスワードを入力してログインしてください：</p>
+        <input type="password" id="sitePassword" placeholder="パスワードを入力">
+        <button onclick="checkPassword()">ログイン</button>
+    </div>
+
+    <!-- 2. ログイン後に表示される投稿フォーム（最初は非表示） -->
+    <div id="postArea" style="display: none; margin-top: 20px;">
+        <h2>✍️ コンテンツ投稿</h2>
+        <input type="file" id="fileInput" accept=".html,.zip"><br><br>
+        <button onclick="uploadContent()">投稿する</button>
+    </div>
+
+    <script>
+        // 🔴【重要】ステップ1で作成した「暗号化されたトークン」をここに貼り付けます
+        // ソースコードにはこの意味不明な文字列しか残らないため、ハッキングされません
+        const ENCRYPTED_TOKEN = "U2FsdGVkX19bqAih6LawPQ8fxM+9dg1jMfjYMhSJSt1pSDB9IBU+TAcKw77mp4gT8N1IwWgokOphpqCvQHxpcrakjb0uGpSVm+CrTkOBe/4+LLGEMnMDmf8a6TLif3XJ2qopuKKOV4Q4Rs0eAKBv2w=="; 
+
+        const OWNER = "myumam1001";
+        const REPO = "maige";
+        
+        // 復号された生のトークンを一時的に保存する変数（ログイン成功時に中身が入る）
+        let decryptedToken = "";
+
+        // 🔑 1. パスワードをチェックしてトークンを復元する
+        function checkPassword() {
+            const password = document.getElementById('sitePassword').value;
+            if (!password) return alert('パスワードを入力してください');
+
+            try {
+                // 暗号化されたトークンを、入力されたパスワードで復号（復元）
+                const bytes = CryptoJS.AES.decrypt(ENCRYPTED_TOKEN, password);
+                const originalToken = bytes.toString(CryptoJS.enc.Utf8);
+
+                // もしパスワードが間違っている場合、空文字またはデコードエラーになります
+                if (originalToken && originalToken.startsWith("github_pat_")) {
+                    decryptedToken = originalToken; // メモリ上に保存
+                    alert("ログインに成功しました！投稿フォームを開きます。");
+                    document.getElementById('loginArea').style.display = "none";
+                    document.getElementById('postArea').style.display = "block";
+                } else {
+                    alert("パスワードが間違っています。");
+                }
+            } catch (e) {
+                alert("パスワードが間違っています。");
+            }
+        }
+
+        // 🚀 2. ユニークなファイル名で投稿する処理
+        async function uploadContent() {
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput.files.length === 0) return alert('ファイルを選択してください');
+
+            const file = fileInput.files[0];
+            
+            // ファイル名の自動生成 (post-年-日付-時刻-ランダム数値)
+            const now = new Date();
+            const timestamp = `post-${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}-${String(now.getHours()).padStart(2,'0')}${String(now.getMinutes()).padStart(2,'0')}${String(now.getSeconds()).padStart(2,'0')}-${Math.floor(1000 + Math.random() * 9000)}`;
+            const ext = file.name.split('.').pop();
+            const uniqueFileName = `${timestamp}.${ext}`;
+
+            const url = `https://github.com{OWNER}/${REPO}/contents/posts/${uniqueFileName}`;
+
+            try {
+                // ファイルをBase64に変換
+                const base64Content = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                    reader.readAsDataURL(file);
+                });
+
+                // 復元された `decryptedToken` を使ってGitHub APIにリクエストを送る
+                const res = await fetch(url, {
+                    method: "PUT",
+                    headers: {
+                        "Authorization": `token ${decryptedToken}`,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        message: `Upload: ${uniqueFileName}`,
+                        content: base64Content
+                    })
+                });
+
+                if (res.ok) {
+                    alert(`投稿成功！\nファイル名: ${uniqueFileName}`);
+                    fileInput.value = "";
+                } else {
+                    alert("アップロードに失敗しました。GitHubの設定を確認してください。");
+                }
+            } catch (error) {
+                console.error(error);
+                alert("通信エラーが発生しました。");
+            }
+        }
+    </script>
+</body>
+</html>
 
