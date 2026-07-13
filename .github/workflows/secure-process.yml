@@ -1,0 +1,39 @@
+name: Secure Extract and Encrypt
+on:
+  repository_dispatch:
+    types: [unzip-and-encrypt-event]
+permissions:
+  contents: write
+
+jobs:
+  secure-process-job:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Recreate ZIP file
+        run: |
+          echo "${{ github.event.client_payload.zip_data }}" | base64 --decode > temporary.zip
+      - name: Unzip archive
+        run: |
+          unzip temporary.zip -d ./extracted-tmp
+      - name: Encrypt files with GPG
+        env:
+          PASSPHRASE: ${{ github.event.client_payload.crypto_key }}
+        run: |
+          mkdir -p ./posts
+          for file in ./extracted-tmp/*; do
+            if [ -f "$file" ]; then
+              filename=$(basename "$file")
+              gpg --batch --yes --passphrase "$PASSPHRASE" --symmetric --cipher-algo AES256 -o "./posts/${filename}.gpg" "$file"
+            fi
+          done
+      - name: Clean up raw data
+        run: |
+          rm -rf temporary.zip ./extracted-tmp
+      - name: Commit and push encrypted files only
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@://github.com"
+          git add ./posts/*.gpg
+          git diff --staged --quiet || (git commit -m "Chore: ユーザー指定パスワードで自動暗号化されたファイルを追加" && git push)
