@@ -1,0 +1,75 @@
+name: DIY Realtime 5-Min Video Viewer Server
+
+# 本編HTMLからのURL指定リクエスト、および削除用の自己リクエストで起動
+on:
+  repository_dispatch:
+    types: [download-video-event, delete-timer-event]
+
+permissions:
+  contents: write
+
+jobs:
+  video-process:
+    runs-on: ubuntu-latest
+    steps:
+      - name: リポジトリの取得
+        uses: actions/checkout@v4
+
+      # ----------------------------------------------------
+      # パターンA：本編HTMLから「動画URL」が送られてきた時の処理
+      # ----------------------------------------------------
+      - name: 指定されたURLから動画をダウンロード
+        if: github.event.action == 'download-video-event'
+        run: |
+          sudo wget https://github.com -O /usr/local/bin/yt-dlp
+          sudo chmod a+rx /usr/local/bin/yt-dlp
+          
+          # ➔ 【修正】video-playerフォルダの中にvideosフォルダを作成
+          mkdir -p ./video-player/videos
+          
+          # ➔ 【修正】保存先を「./video-player/videos/」に変更
+          yt-dlp -f "bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]" -o "./video-player/videos/video_${{ github.event.client_payload.video_id }}.%(ext)s" "${{ github.event.client_payload.video_url }}"
+
+      # パターンAの続き：動画をGitHubに保存し、同時に「5分後の自分」へ削除リクエストを予約送信する
+      - name: 動画を保存 ＆ 5分後削除タイマーの起動指示
+        if: github.event.action == 'download-video-event'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@://github.com"
+          
+          # ➔ 【修正】video-player内の動画だけをコミット対象にする
+          git add ./video-player/videos/*
+          git diff --staged --quiet || (git commit -m "Add: 新しい動画をvideo-playerに追加" && git push)
+          
+          # 本編から受け取った「アクセスコード」を使って、5分後に自分自身を動かす「削除指示API」を今すぐ叩く
+          curl -X POST \
+            -H "Authorization: token ${{ github.event.client_payload.access_token }}" \
+            -H "Accept: application/vnd.github.v3+json" \
+            https://github.com{{ github.repository }}/dispatches \
+            -d '{"event_type": "delete-timer-event", "client_payload": {"target_id": "${{ github.event.client_payload.video_id }}"}}'
+
+      # ----------------------------------------------------
+      # パターンB：5分後削除タイマー（自分自身からのAPI）が届いた時の処理
+      # ----------------------------------------------------
+      # ここでサーバーが5分（300秒）じっとカウントダウンして待機します
+      - name: 5分間（300秒）ぴったり待機するタイマー
+        if: github.event.action == 'delete-timer-event'
+        run: sleep 300
+
+      # 指定された動画IDのファイルだけをピンポイントで抹殺
+      - name: 対象の動画をぴったりピンポイント削除
+        if: github.event.action == 'delete-timer-event'
+        run: |
+          # ➔ 【修正】video-player内の対象ファイル（video_動画ID.mp4）だけを消去
+          rm -f ./video-player/videos/video_${{ github.event.client_payload.target_id }}.*
+
+      # 削除をGitHubリポジトリに確定反映させる
+      - name: 削除結果をリポジトリに反映
+        if: github.event.action == 'delete-timer-event'
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@://github.com"
+          
+          # ➔ 【修正】video-player内の変更（削除）のみをGitに登録
+          git add -A ./video-player/videos/
+          git diff --staged --quiet || (git commit -m "Delete: 5分経過した動画をvideo-playerから自動消去" && git push)
