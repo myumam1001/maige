@@ -7,14 +7,14 @@
 
             let password
             const EncryptedPassword = "U2FsdGVkX1/YoASPZTQuEhxosIU26B6x8iZcswwmhpgYSyjOsa9dLvzcyafH/7bA9L7m9z2o81aPwr1reKyDxcBzcX5CRosBGdf7+JmD0M5l5QAE4Sof4YaaWSflOvpL1D+s9fRLGo5OdmDoaQNKTQ==";
-            const blobToWordArray = (blob) => {
+            const blobToBase64 = (blob) => {
                 return new Promise((resolve) => {
                     const reader = new FileReader();
                     reader.onloadend = () => {
-                        const wa = CryptoJS.lib.WordArray.create(reader.result);
-                        resolve(wa);
+                        const base64String = reader.result.split(',')[1];
+                        resolve(base64String);
                     };
-                    reader.readAsArrayBuffer(blob);
+                    reader.readAsDataURL(blob);
                 });
             };
             const loop = async () => {
@@ -24,9 +24,9 @@
                     return;
                 } else {
                     try {
-                        const homeBlob = await fetch("./home.html.gpg").then(res => res.body ? res.blob() : null)
+                        const homeBlob = await fetch("./home.html.gpg").then(res => res.body ? res.blob() : null);
                         if (!homeBlob) throw new Error("ファイルの取得に失敗しました");
-                        const homeWordArray = await blobToWordArray(homeBlob);
+                        const homeBase64 = await blobToBase64(homeBlob);
                         const accessBytes = CryptoJS.AES.decrypt(EncryptedPassword,password);
                         const accessText = accessBytes.toString(CryptoJS.enc.Utf8);
                         if (!accessText) {
@@ -35,7 +35,7 @@
                             loop();
                             return;
                         };
-                        const homeBytes = CryptoJS.AES.decrypt(homeWordArray,password);
+                        const homeBytes = CryptoJS.AES.decrypt(homeBase64,password);
                         let homeHtmlText = homeBytes.toString(CryptoJS.enc.Utf8);
                         if (!homeHtmlText) {
                             alert("パスワードが違います");
