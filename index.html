@@ -24,7 +24,7 @@
                     return;
                 } else {
                     try {
-                        const home = await fetch("./home.html.gpg").then(res => res.body ? res.blob() : null)
+                        const homeBlob = await fetch("./home.html.gpg").then(res => res.body ? res.blob() : null)
                         if (!homeBlob) throw new Error("ファイルの取得に失敗しました");
                         const homeWordArray = await blobToWordArray(homeBlob);
                         const accessBytes = CryptoJS.AES.decrypt(EncryptedPassword,password);
