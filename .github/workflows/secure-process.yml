@@ -36,5 +36,5 @@ jobs:
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@://github.com"
-          git add ./posts/*.gpg
+          git add ./posts/**/*.gpg
           git diff --staged --quiet || (git commit -m "Chore: ユーザー指定パスワードで自動暗号化されたファイルを追加" && git push)
