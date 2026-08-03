@@ -20,12 +20,13 @@ jobs:
       - name: Encrypt files with GPG
         env:
           PASSPHRASE: ${{ github.event.client_payload.crypto_key }}
+          DIR_NAME: "run-${{ github.run_id }}"
         run: |
-          mkdir -p ./posts
+          mkdir -p "./posts/$DIR_NAME" #
           for file in ./extracted-tmp/*; do
             if [ -f "$file" ]; then
               filename=$(basename "$file")
-              gpg --batch --yes --passphrase "$PASSPHRASE" --symmetric --cipher-algo AES256 -o "./posts/${filename}.gpg" "$file"
+              gpg --batch --yes --passphrase "$PASSPHRASE" --symmetric --cipher-algo AES256 -o "./posts/$DIR_NAME/${filename}.gpg" "$file"
             fi
           done
       - name: Clean up raw data
