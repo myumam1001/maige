@@ -1,7 +1,8 @@
 name: Secure Extract and Encrypt
 on:
-  repository_dispatch:
-    types: [unzip-and-encrypt-event]
+  push:
+    branches:
+      - data-transport
 permissions:
   contents: write
 
@@ -11,17 +12,20 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Recreate ZIP file
+        with:
+          fetch-depth: 0 
+      - name: Prepare main branch files
         run: |
-          echo "${{ github.event.client_payload.zip_data }}" | base64 --decode > temporary.zip
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]github.com"
+          git checkout origin/main -- posts/ || true
       - name: Unzip archive
         run: |
-          unzip temporary.zip -d ./extracted-tmp
+          unzip upload.zip -d ./extracted-tmp
       - name: Encrypt files with GPG
-        env:
-          PASSPHRASE: ${{ github.event.client_payload.crypto_key }}
-          DIR_NAME: "run-${{ github.run_id }}"
         run: |
+          PASSPHRASE=$(jq -r '.crypto_key' config.json)
+          DIR_NAME="run-${{ github.run_id }}"
           mkdir -p "./posts/$DIR_NAME" #
           for file in ./extracted-tmp/*; do
             if [ -f "$file" ]; then
@@ -30,12 +34,11 @@ jobs:
             fi
           done
       - name: "Update or create filelist.json.gpg"
-        env:
-          PASSPHRASE: ${{ github.event.client_payload.filelist_key }}
-          DIR_NAME: "run-${{ github.run_id }}"
-          HINT: ${{ github.event.client_payload.crypto_hint }}
-          TITLE: ${{ github.event.client_payload.title }}
         run: |
+          PASSPHRASE=$(jq -r '.filelist_key' config.json)
+          HINT=$(jq -r '.crypto_hint' config.json)
+          TITLE=$(jq -r '.title' config.json)
+          DIR_NAME="run-${{ github.run_id }}"
           if [ -f "./posts/filelist.json.gpg" ]; then
             gpg --batch --yes --passphrase "$PASSPHRASE" --decrypt -o filelist.json ./posts/filelist.json.gpg
           else
@@ -43,13 +46,16 @@ jobs:
           fi
           jq --arg dir "$DIR_NAME" --arg hint "$HINT" --arg title "$TITLE" '. += [{"dir": $dir, "hint": $hint, "title": $title}]' filelist.json > tmp.json && mv tmp.json filelist.json
           gpg --batch --yes --passphrase "$PASSPHRASE" --symmetric --cipher-algo AES256 -o "./posts/filelist.json.gpg" filelist.json
-      - name: Clean up raw data
+      - name: Commit and push to main branch
         run: |
-          rm -rf temporary.zip ./extracted-tmp
-          rm -f filelist.json
-      - name: Commit and push encrypted files only
-        run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout main
           git add ./posts/**/*.gpg ./posts/filelist.json.gpg
-          git diff --staged --quiet || (git commit -m "Chore: ユーザー指定パスワードで自動暗号化されたファイルを追加" && git push)
+          git diff --staged --quiet || (git commit -m "Chore: 大容量ファイルを暗号化して追加" && git push origin main)
+      - name: Clean up raw data from transport branch
+        run: |
+          git checkout data-transport
+          rm -rf upload.zip ./extracted-tmp filelist.json tmp.json
+          echo "This branch is used for temporary data transport." > README.md
+          git add -A
+          git commit --amend -m "Chore: 生データの完全消去"
+          git push origin data-transport --force
