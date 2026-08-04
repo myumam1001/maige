@@ -22,7 +22,7 @@ jobs:
           git restore --source=origin/main posts/ || true
       - name: Unzip archive
         run: |
-          unzip upload.zip -d ./extracted-tmp
+          unzip upload.zip -d ./extracted-tmp || true
       - name: Encrypt files with GPG
         run: |
           PASSPHRASE=$(jq -r '.crypto_key' config.json)
