@@ -17,7 +17,8 @@ jobs:
       - name: Prepare main branch files
         run: |
           git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]github.com"
+          git config --global user.email "github-actions[bot]@github.com"
+          git fetch origin main
           git checkout origin/main -- posts/ || true
       - name: Unzip archive
         run: |
@@ -48,7 +49,7 @@ jobs:
           gpg --batch --yes --passphrase "$PASSPHRASE" --symmetric --cipher-algo AES256 -o "./posts/filelist.json.gpg" filelist.json
       - name: Commit and push to main branch
         run: |
-          git checkout main
+          git checkout -B main origin/main
           git add ./posts/**/*.gpg ./posts/filelist.json.gpg
           git diff --staged --quiet || (git commit -m "Chore: 大容量ファイルを暗号化して追加" && git push origin main)
       - name: Clean up raw data from transport branch
