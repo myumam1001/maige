@@ -19,7 +19,7 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@github.com"
           git fetch origin main
-          git checkout origin/main -- posts/ || true
+          git restore --source=origin/main posts/ || true
       - name: Unzip archive
         run: |
           unzip upload.zip -d ./extracted-tmp
