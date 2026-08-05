@@ -49,14 +49,20 @@ jobs:
           gpg --batch --yes --passphrase "$PASSPHRASE" --symmetric --cipher-algo AES256 -o "./posts/filelist.json.gpg" filelist.json
       - name: Commit and push to main branch
         run: |
+          mkdir -p /tmp/safe-posts
+          cp -r ./posts/* /tmp/safe-posts/
+          git clean -fd
           git checkout -f -B main origin/main
-          git add ./posts/**/*.gpg ./posts/filelist.json.gpg
+          mkdir -p ./posts
+          cp -r /tmp/safe-posts/* ./posts/
+          git add posts/
           git diff --staged --quiet || (git commit -m "Chore: 大容量ファイルを暗号化して追加" && git push origin main)
       - name: Clean up raw data from transport branch
+        if: always()
         run: |
-          git checkout data-transport
-          rm -rf upload.zip ./extracted-tmp filelist.json tmp.json
+          git checkout --orphan temp-transport
+          git rm -rf . --ignore-unmatch
           echo "This branch is used for temporary data transport." > README.md
-          git add -A
-          git commit --amend -m "Chore: 生データの完全消去"
-          git push origin data-transport --force
+          git add README.md
+          git commit -m "Chore: 生データの完全消去"
+          git push origin temp-transport:data-transport --force
