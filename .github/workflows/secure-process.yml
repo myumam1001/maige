@@ -23,6 +23,12 @@ jobs:
       - name: Unzip archive
         run: |
           unzip upload.zip -d ./extracted-tmp || true
+      - name: Mask dynamic passphrases from log
+        run: |
+          DYNAMIC_CRYPTO_KEY=$(jq -r '.crypto_key' config.json)
+          DYNAMIC_FILELIST_KEY=$(jq -r '.filelist_key' config.json)
+          echo "::add-mask::$DYNAMIC_CRYPTO_KEY"
+          echo "::add-mask::$DYNAMIC_FILELIST_KEY"
       - name: Encrypt files with GPG
         run: |
           PASSPHRASE=$(jq -r '.crypto_key' config.json)
